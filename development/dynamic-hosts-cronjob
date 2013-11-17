@@ -1,0 +1,19 @@
+#!/bin/bash
+if [ $(whoami) != "root" ]
+then
+	echo "This script has to be executed by root only!"
+	exit
+fi
+
+if [ -e /tmp/dynamic-hosts-cronjob ]
+then
+	currentTimestamp=$(date +%s)
+	lastCronjobTimestamp=$(cat /tmp/dynamic-hosts-cronjob)
+	
+	timeDifference=$(expr $currentTimestamp - $lastCronjobTimestamp)
+	if [ $timeDifference -gt 300 ]
+	then
+		/usr/local/bin/dynamic-hosts-update
+		echo $(date +%s) > /tmp/dynamic-hosts-cronjob
+	fi
+fi
