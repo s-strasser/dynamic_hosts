@@ -16,4 +16,8 @@ then
 		/usr/local/bin/dynamic-hosts-update
 		echo $(date +%s) > /tmp/dynamic-hosts-cronjob
 	fi
+
+else
+	/usr/local/bin/dynamic-hosts-update
+        echo $(date +%s) > /tmp/dynamic-hosts-cronjob
 fi
