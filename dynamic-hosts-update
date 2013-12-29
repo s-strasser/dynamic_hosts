@@ -1,0 +1,67 @@
+#!/bin/bash
+if [ $(whoami) != "root" ]
+then
+	echo "Only root is allowed to execute this cronjob!"
+	exit
+fi
+
+if ! lockfile -1 -r0 /tmp/dynamic-hosts-update-lock &> /dev/null
+then
+	echo "This script cannot be executed more than one time!"
+	exit
+fi
+
+function getMatchingIp
+{
+        for hostname in "$@"
+        do
+                result=$(host $hostname| head -n 1 | cut -f4 -d" ")
+                if [ $result != "found:" ]
+                then
+                        echo $result
+                        return
+                fi
+        done
+        echo "error"
+}
+
+if [ -e /etc/dynamic_hosts/hosts ]
+then
+	# Read contents of /etc/hosts
+	hostFileContent=$(cat /etc/hosts)
+
+	# Process every line of the dynamic_hosts/hosts-file
+	while read line          
+	do    
+		if [ ${#line} -gt 5 ]
+		then
+			# Split line into two pieces
+	    		hostFileEntry=$(echo $line | cut -f1 -d":" | sed -e 's/^ *//g' -e 's/ *$//g')
+			dnsTarget=$(echo $line | cut -f2 -d":" | sed -e 's/^ *//g' -e 's/ *$//g')
+
+			# Get current ip
+			dnsTargetCurrentIp=$(getMatchingIp $dnsTarget)
+
+			# Check if a ip was found
+			if [ $dnsTargetCurrentIp == "error" ]
+			then
+				echo "Domain $dnsTarget could'nt be resolved!"
+			else
+				# Remove line from hosts file (but do not save yet!)
+	                        hostFileEntryEscaped=$(echo $hostFileEntry|sed -e 's/[]\/()$*.^|[]/\\&/g')
+        	                hostFileContent=$(echo "$hostFileContent"|sed -e "/${hostFileEntryEscaped}/d")
+
+                	        # Add line to hosts file content (but do not save yet!)
+                        	hostFileContent=$(echo "$hostFileContent"; echo "$dnsTargetCurrentIp    $hostFileEntry # Added by dynamic_hosts at $(date)")
+			fi
+		fi
+	done < /etc/dynamic_hosts/hosts
+
+	# Write content to /etc/hosts
+	echo "$hostFileContent" > /etc/hosts
+
+	# Delete lock file
+	rm /tmp/dynamic-hosts-update-lock
+else
+	echo "Unable to find configuration file /etc/dynamic_hosts/hosts!"
+fi
